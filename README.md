@@ -35,9 +35,13 @@ journal-watch/
 ## Status
 
 - [x] Phase 1: foundation — journal list + taxonomies committed
-- [ ] Phase 2: fetcher + classifier
-- [ ] Phase 3: weekly email digest + Google Form subscriber registry
-- [ ] Phase 4: backfill + polish
+- [x] Phase 2: fetcher + classifier
+- [x] Phase 3: weekly email digest + Google Form subscriber registry — see [SETUP.md](SETUP.md)
+- [ ] Phase 4: backfill last 12 months + polish
+
+## Setup
+
+See **[SETUP.md](SETUP.md)** for the one-time configuration (API keys, Gmail App Password, Google Form).
 
 ## Scope
 
