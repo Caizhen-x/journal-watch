@@ -34,14 +34,25 @@ journal-watch/
 
 ## Status
 
-- [x] Phase 1: foundation — journal list + taxonomies committed
-- [x] Phase 2: fetcher + classifier
-- [x] Phase 3: weekly email digest + Google Form subscriber registry — see [SETUP.md](SETUP.md)
-- [ ] Phase 4: backfill last 12 months + polish
+- [x] Phase 1: foundation — journal list + taxonomies
+- [x] Phase 2: fetcher (OpenAlex) + classifier (Claude Haiku)
+- [x] Phase 3: weekly email digest + Google Form subscriber registry
+- [x] Phase 4: 12-month backfill + Streamlit browse UI
 
 ## Setup
 
 See **[SETUP.md](SETUP.md)** for the one-time configuration (API keys, Gmail App Password, Google Form).
+
+## Browse UI
+
+Local Streamlit app for the topic × method filter view:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Opens at http://localhost:8501. Filters: topics (multi-select), methods (multi-select), minimum relevance, journal subset, date range. Sortable, with CSV export.
 
 ## Scope
 
