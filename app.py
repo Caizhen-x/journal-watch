@@ -121,6 +121,12 @@ def main():
         help="Show papers that haven't been classified yet (will appear without tags)."
     )
 
+    keyword = st.sidebar.text_input(
+        "Keyword (title or abstract)",
+        placeholder="e.g., Kenya, conjoint, organic",
+        help="Case-insensitive substring match. Combines with the other filters (AND).",
+    ).strip().lower()
+
     # ---------- Apply filters ----------
     def matches(p):
         if not show_unclassified and not p["classified"]:
@@ -135,6 +141,8 @@ def main():
         if journal_filter and p["journal_code"] not in journal_filter:
             return False
         if p["pub_date"] < date_from.isoformat():
+            return False
+        if keyword and keyword not in p["title"].lower() and keyword not in p["abstract"].lower():
             return False
         return True
 
