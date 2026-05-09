@@ -10,13 +10,18 @@ from pathlib import Path
 import altair as alt
 import pandas as pd
 import streamlit as st
+import sys
 import yaml
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from auth import require_password
 
 DB_PATH = Path(__file__).parent.parent / "data" / "papers.db"
 TAX_PATH = Path(__file__).parent.parent / "data" / "taxonomies.yaml"
 JOURNALS_PATH = Path(__file__).parent.parent / "data" / "journals.yaml"
 
 st.set_page_config(page_title="Trends — Journal Watch", page_icon="📊", layout="wide")
+require_password()
 
 
 @st.cache_data(ttl=300)

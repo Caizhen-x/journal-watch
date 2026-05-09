@@ -10,11 +10,14 @@ from pathlib import Path
 import streamlit as st
 import yaml
 
+from auth import require_password
+
 DB_PATH = Path(__file__).parent / "data" / "papers.db"
 TAX_PATH = Path(__file__).parent / "data" / "taxonomies.yaml"
 JOURNALS_PATH = Path(__file__).parent / "data" / "journals.yaml"
 
 st.set_page_config(page_title="Journal Watch", page_icon="📚", layout="wide")
+require_password()
 
 
 @st.cache_data(ttl=300)
