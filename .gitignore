@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.*
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data / state (papers.db is committed by GHA, not locally)
+*.db-journal
+*.log
+.cache/
+
+# Secrets — never commit
+*.key
+secrets.yaml
+config.local.*

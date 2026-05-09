@@ -1,0 +1,97 @@
+# Topic and method taxonomies for paper classification.
+# Each paper will be tagged with zero or more topic codes and zero or more method codes.
+# Edit freely — the classifier reads this file every run.
+
+topics:
+  - code: agri_food_value_chain
+    label: Agri-food value chain & supply chain
+    description: Value chain organization, GVCs, supply chain management, governance
+  - code: sustainability_governance
+    label: Sustainability & governance of agri-food systems
+    description: Sustainable, resilient, equitable food systems; certification, standards
+  - code: food_security_nutrition
+    label: Food security & nutrition
+    description: Food security, dietary outcomes, nutrition policy
+  - code: smallholder_gender
+    label: Smallholder farmers & gender dynamics
+    description: Smallholder farmers, women's agency, labor-land dynamics
+  - code: agroforestry_ecosystem
+    label: Agroforestry & ecosystem services
+    description: Agroforestry, ecosystem services, living income, biodiversity
+  - code: digital_agtech_adoption
+    label: Digital agriculture & ag-tech adoption
+    description: Digital innovations, ag-tech, technology adoption
+  - code: consumer_behavior_food
+    label: Consumer behavior & food choice
+    description: Consumer perception, food choice, willingness-to-pay for food attributes
+  - code: climate_agriculture
+    label: Climate change & agriculture
+    description: Climate impacts on/from agriculture, adaptation, mitigation
+  - code: trade_policy
+    label: Agricultural trade & policy
+    description: Trade, subsidies, policy impact evaluation in agriculture
+  - code: land_use_economics
+    label: Land use & land economics
+    description: Land tenure, land use change, deforestation
+  - code: energy_agriculture
+    label: Energy & agriculture
+    description: Bioenergy, energy use in food systems
+  - code: ai_in_agriculture
+    label: AI / ML in agriculture
+    description: AI/ML applications in agriculture (personal interest of project owner)
+
+methods:
+  # Causal inference
+  - code: ci_rct
+    label: RCT / field experiment
+    group: causal_inference
+  - code: ci_did
+    label: Difference-in-differences
+    group: causal_inference
+  - code: ci_iv
+    label: Instrumental variables
+    group: causal_inference
+  - code: ci_rdd
+    label: Regression discontinuity
+    group: causal_inference
+  - code: ci_matching_synthetic
+    label: Matching / synthetic control
+    group: causal_inference
+
+  # Structural / theoretical
+  - code: structural_estimation
+    label: Structural estimation
+    group: structural_theory
+  - code: theoretical_model
+    label: Theoretical / analytical model
+    group: structural_theory
+
+  # Experimental (non-RCT)
+  - code: lab_online_experiment
+    label: Lab / online experiment
+    group: experimental
+  - code: choice_experiment
+    label: Discrete choice / contingent valuation / WTP
+    group: experimental
+
+  # Other empirical
+  - code: survey_descriptive
+    label: Survey / descriptive analysis
+    group: empirical_other
+  - code: mixed_methods
+    label: Mixed methods (quant + qual)
+    group: empirical_other
+  - code: qualitative
+    label: Qualitative (case study, interviews, ethnography)
+    group: empirical_other
+  - code: ml_prediction
+    label: Machine learning / prediction
+    group: empirical_other
+
+  # Aggregative / simulation
+  - code: review_meta
+    label: Systematic review / meta-analysis / bibliometric
+    group: aggregative
+  - code: simulation_cge_abm
+    label: Simulation (CGE, agent-based, etc.)
+    group: aggregative
