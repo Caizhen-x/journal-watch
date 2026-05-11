@@ -101,6 +101,10 @@ def main():
 
     st.title("📊 Trends — Ag/Env Econ Literature")
 
+    form_url = st.secrets.get("subscribe_form_url") if hasattr(st, "secrets") else None
+    if form_url:
+        st.link_button("📬 Subscribe to the weekly email digest", form_url, type="secondary")
+
     if df.empty:
         st.warning("No classified papers yet. Run the classifier first (`python -m src.classify`).")
         return

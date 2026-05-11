@@ -75,8 +75,12 @@ def main():
     st.caption(
         f"{len(papers):,} papers across {len(journals)} journals · "
         f"{sum(1 for p in papers if p['classified']):,} classified · "
-        "Agri-Food Chain Management group, HU Berlin"
+        "Thaer-Institut · Management of Agricultural Value Chains group · HU Berlin"
     )
+
+    form_url = st.secrets.get("subscribe_form_url") if hasattr(st, "secrets") else None
+    if form_url:
+        st.link_button("📬 Subscribe to the weekly email digest", form_url, type="secondary")
 
     if not papers:
         st.warning("No papers in database yet. Run `python -m src.fetch` first.")
