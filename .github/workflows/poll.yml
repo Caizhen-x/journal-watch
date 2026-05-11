@@ -1,8 +1,8 @@
-name: Daily poll
+name: Weekly poll
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # 06:00 UTC daily
+    - cron: '0 6 * * 1'  # 06:00 UTC every Monday (1 hour before the weekly digest)
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No DB changes."
           else
-            git commit -m "chore: daily poll $(date -u +%Y-%m-%d)"
+            git commit -m "chore: weekly poll $(date -u +%Y-%m-%d)"
             git push
           fi
