@@ -38,19 +38,6 @@ Send group members one message containing:
 
 Tell them to **bookmark the URL**, not save the password in an email thread.
 
-## Optional: enable the "Subscribe to weekly digest" button
-
-When you have the Google Form (see `SETUP.md`), grab its public "responder" link and add it to the app's secrets. The homepage and Trends page will then show a button that opens the form in a new tab.
-
-1. Streamlit Cloud dashboard → your app → **Settings** → **Secrets**.
-2. Add a new line:
-   ```toml
-   subscribe_form_url = "https://docs.google.com/forms/d/e/SOMETHING/viewform"
-   ```
-3. Click **Save**. The app reloads in ~10 seconds. The button appears.
-
-If you leave this out, the button doesn't show. No errors.
-
 ## Rotating the password
 
 If you need to change it (someone left the group, etc.):
