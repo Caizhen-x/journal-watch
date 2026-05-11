@@ -1,59 +1,57 @@
 # Journal Watch
 
-Automated journal watch for the **Agri-Food Chain Management** group at Humboldt-Universität zu Berlin.
+Automated journal watch for the **Agrifood Chain Management** group at the Thaer-Institut, Humboldt-Universität zu Berlin.
 
-Polls top journals daily, classifies new papers by **topic × method** using an LLM, and emails a weekly digest of matching papers to subscribed group members.
+### 🌐 [**Open the live website →**](https://thaer-agrifood-journal-watch.streamlit.app/)
+
+[![Live app](https://img.shields.io/badge/Live_app-thaer--agrifood--journal--watch.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://thaer-agrifood-journal-watch.streamlit.app/) [![Hosted on Streamlit Cloud](https://img.shields.io/badge/hosted_on-Streamlit_Cloud-FF4B4B)](https://share.streamlit.io)
+
+The site polls top journals weekly, classifies new papers by **topic × method** using an LLM, and emails a weekly digest of matching papers to subscribed group members. Group members access the dashboard with the shared password.
 
 ## How it works
 
 ```
-[GitHub Actions, daily]
+[GitHub Actions, every Monday]
     ↓
-Fetch new papers from Crossref / OpenAlex / Semantic Scholar (by ISSN)
+Fetch new papers from OpenAlex (by ISSN)
     ↓
-LLM classifier tags each paper with topics[] + methods[] + relevance score
+Claude Haiku classifier tags each paper: topics[] + methods[] + relevance (0–10)
     ↓
-SQLite (committed back to repo for state persistence)
+SQLite committed back to the repo → Streamlit Cloud auto-redeploys
     ↓
-[GitHub Actions, weekly]
-    ↓
-For each subscriber's saved filter → render briefs → send via Gmail
+Weekly digest workflow renders briefs and emails subscribers
 ```
 
 ## Repo layout
 
 ```
 journal-watch/
+├── app.py                 # Streamlit entrypoint (st.navigation)
+├── auth.py                # Shared-password gate
+├── views/                 # Dashboard + Trends pages
+├── assets/hu-logo.png     # HU Berlin seal
+├── src/                   # fetcher, classifier, digest builder, DB
 ├── data/
-│   ├── journals.yaml      # journal registry with ISSNs (edit to add/remove journals)
-│   ├── taxonomies.yaml    # topic + method taxonomies (edit to refine classification)
-│   └── papers.db          # SQLite, populated by Phase 2 fetcher
-├── src/                   # Phase 2: fetcher, classifier, digest builder
-└── .github/workflows/     # Phase 3: cron schedules
+│   ├── journals.yaml      # 20 journals with ISSNs
+│   ├── taxonomies.yaml    # 12 topics × 15 methods
+│   └── papers.db          # ~20K classified papers, updated weekly
+├── .github/workflows/     # weekly-poll + weekly-digest cron
+├── SETUP.md               # one-time setup (API keys, Gmail, Google Form)
+├── DEPLOY.md              # how the public site is hosted
+└── ROADMAP.md             # deferred upgrades
 ```
 
-## Status
-
-- [x] Phase 1: foundation — journal list + taxonomies
-- [x] Phase 2: fetcher (OpenAlex) + classifier (Claude Haiku)
-- [x] Phase 3: weekly email digest + Google Form subscriber registry
-- [x] Phase 4: 12-month backfill + Streamlit browse UI
-
-## Setup
-
-See **[SETUP.md](SETUP.md)** for the one-time configuration (API keys, Gmail App Password, Google Form).
-
-## Browse UI
-
-Local Streamlit app for the topic × method filter view:
+## Run locally
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Opens at http://localhost:8501. Filters: topics (multi-select), methods (multi-select), minimum relevance, journal subset, date range. Sortable, with CSV export.
+Opens at http://localhost:8501. Same code as the live site; without `app_password` configured in `.streamlit/secrets.toml`, the password gate is disabled for local development.
 
-## Scope
+## Coverage
 
-Initial coverage is the 20 journals in `data/journals.yaml` (Agricultural Economics + Environmental & Resource Economics). Other domains from the parent project will be added after Phase 3 ships.
+20 journals across **Agricultural Economics** and **Environmental & Resource Economics**, ~20,000 classified papers spanning 2016–present. Updated weekly via the GitHub Actions workflow.
+
+See [`ROADMAP.md`](ROADMAP.md) for planned upgrades.
