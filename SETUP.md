@@ -150,7 +150,7 @@ Add yourself to the Form first so the test digest has a subscriber.
 
 ## Schedules
 
-- **Daily poll** runs at 06:00 UTC (07:00/08:00 Berlin depending on DST).
-- **Weekly digest** runs Monday 07:00 UTC.
+- **Weekly poll** runs Monday 06:00 UTC (07:00/08:00 Berlin depending on DST).
+- **Weekly digest** has no schedule while paused; when re-enabled, it runs Monday 07:00 UTC. To re-enable, uncomment the `schedule:` block in `.github/workflows/digest.yml` and set `ENABLE_DIGEST` to `"true"`.
 
 Adjust in `.github/workflows/*.yml` if needed.
