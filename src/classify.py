@@ -72,7 +72,7 @@ def run(limit: int | None = None):
 
     db.init()
     with db.conn() as c:
-        papers = db.get_unclassified(c, limit)
+        papers = db.get_unclassified(c, classifier_version=CLASSIFIER_VERSION, limit=limit)
 
     print(f"Classifying {len(papers)} papers...")
     classified = 0

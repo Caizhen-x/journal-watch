@@ -50,3 +50,7 @@ For pure visual flair: add **#14 (word clouds)** — biggest "colorful" punch.
 - **Domain expansion** — currently 20 journals across Ag Econ + Env & Resource Econ. The original folder has 6 more domains (Dev Econ, Econometrics, Economics, Info & Mgmt, Statistics, other). Adding them is just appending to `data/journals.yaml`.
 - **Group photos / custom branding** — beyond the HU Berlin seal currently rendered via `st.logo()`. Could add a banner image, team grid, lab building shot in the dashboard header.
 - **Classifier prompt tuning** — after a few weeks of real use, review whether the relevance scores feel calibrated. Bump `CLASSIFIER_VERSION` to force a reclassify pass with a refined prompt.
+- **Git history bloat from committed SQLite DB** — `data/papers.db` is ~24 MB and re-committed weekly by the GHA workflow. ~1.25 GB/year of binary diffs in `.git/`. Acceptable for now; revisit when the repo passes ~500 MB. Options:
+  - Move DB to a GHA release artifact (`actions/upload-artifact`) and have Streamlit Cloud download it on startup — keeps git lean but adds startup latency
+  - Git LFS — requires GitHub Pro for private LFS; we're public, so this is free but quota-limited
+  - Separate orphan branch for the DB so it doesn't bloat `main`'s history

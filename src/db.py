@@ -36,10 +36,10 @@ CREATE TABLE IF NOT EXISTS fetch_state (
 );
 
 CREATE TABLE IF NOT EXISTS digest_log (
-    doi          TEXT NOT NULL,
-    subscriber   TEXT NOT NULL,
-    sent_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (doi, subscriber)
+    doi               TEXT NOT NULL,
+    subscriber_hash   TEXT NOT NULL,
+    sent_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (doi, subscriber_hash)
 );
 """
 
@@ -57,8 +57,17 @@ def conn():
         c.close()
 
 
+def _migrate_digest_log(c):
+    """Old schema stored plaintext emails. New schema stores SHA-256 hashes.
+    digest_log has always been empty in production, so we drop and recreate."""
+    cols = [r[1] for r in c.execute("PRAGMA table_info(digest_log)").fetchall()]
+    if cols and "subscriber" in cols and "subscriber_hash" not in cols:
+        c.execute("DROP TABLE digest_log")
+
+
 def init():
     with conn() as c:
+        _migrate_digest_log(c)
         c.executescript(SCHEMA)
 
 
@@ -91,18 +100,34 @@ def upsert_paper(c, paper: dict) -> str:
     return "unchanged"
 
 
-def get_unclassified(c, limit: int | None = None, min_abstract_chars: int = 100) -> list[sqlite3.Row]:
-    """Return papers needing classification. Skips papers with abstracts shorter than min_abstract_chars
-    unless the paper is older than 30 days (then classify with whatever we have)."""
+def get_unclassified(
+    c,
+    classifier_version: str | None = None,
+    limit: int | None = None,
+    min_abstract_chars: int = 100,
+) -> list[sqlite3.Row]:
+    """Return papers needing classification.
+
+    A paper needs classification if either:
+    - it has never been classified, OR
+    - its existing classification's classifier_version differs from `classifier_version` (if provided).
+
+    Skips papers with abstracts shorter than min_abstract_chars unless older than 30 days.
+    """
+    version_clause = "cls.doi IS NULL"
+    params: tuple = ()
+    if classifier_version is not None:
+        version_clause = "(cls.doi IS NULL OR cls.classifier_version != ?)"
+        params = (classifier_version,)
     sql = f"""SELECT p.* FROM papers p
              LEFT JOIN classifications cls ON cls.doi = p.doi
-             WHERE cls.doi IS NULL
+             WHERE {version_clause}
                AND (length(coalesce(p.abstract, '')) >= {int(min_abstract_chars)}
                     OR julianday('now') - julianday(p.pub_date) > 30)
              ORDER BY p.pub_date DESC"""
     if limit:
         sql += f" LIMIT {int(limit)}"
-    return list(c.execute(sql))
+    return list(c.execute(sql, params))
 
 
 def save_classification(c, doi: str, topics: list, methods: list, relevance: int, version: str):

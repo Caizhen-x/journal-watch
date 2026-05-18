@@ -29,17 +29,42 @@ def load_journals():
     return out
 
 
+MIN_ABSTRACT_CHARS = 100  # below this, the classifier had nothing meaningful to read
+
+
+@st.cache_data(ttl=120)
+def load_coverage_stats() -> dict:
+    """Total classified vs the fraction that had a real abstract.
+    Used to warn the user about the no-abstract bias."""
+    if not DB_PATH.exists():
+        return {"total": 0, "with_abstract": 0}
+    c = sqlite3.connect(DB_PATH)
+    total = c.execute(
+        "SELECT COUNT(*) FROM papers p JOIN classifications cls ON cls.doi = p.doi"
+    ).fetchone()[0]
+    with_abs = c.execute(
+        f"SELECT COUNT(*) FROM papers p JOIN classifications cls ON cls.doi = p.doi "
+        f"WHERE length(coalesce(p.abstract, '')) >= {MIN_ABSTRACT_CHARS}"
+    ).fetchone()[0]
+    c.close()
+    return {"total": total, "with_abstract": with_abs}
+
+
 @st.cache_data(ttl=120)
 def load_classified_papers() -> pd.DataFrame:
+    """Only includes papers with a substantive abstract. Papers without abstracts
+    are classified as relevance=0 with empty tags by the LLM, which would bias
+    averages and dilute trend signals."""
     if not DB_PATH.exists():
         return pd.DataFrame()
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
     rows = c.execute(
-        """SELECT p.doi, p.journal_code, p.pub_date,
+        f"""SELECT p.doi, p.journal_code, p.pub_date,
                   cls.topics_json, cls.methods_json, cls.relevance
            FROM papers p
-           JOIN classifications cls ON cls.doi = p.doi"""
+           JOIN classifications cls ON cls.doi = p.doi
+           WHERE length(coalesce(p.abstract, '')) >= {MIN_ABSTRACT_CHARS}"""
     ).fetchall()
     c.close()
     records = []
@@ -54,15 +79,17 @@ def load_classified_papers() -> pd.DataFrame:
 
 @st.cache_data(ttl=120)
 def load_paper_summaries() -> pd.DataFrame:
+    """Same abstract filter as load_classified_papers — keep the two views consistent."""
     if not DB_PATH.exists():
         return pd.DataFrame()
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
     rows = c.execute(
-        """SELECT p.doi, p.title, p.authors_json, p.journal_code, p.pub_date,
+        f"""SELECT p.doi, p.title, p.authors_json, p.journal_code, p.pub_date,
                   cls.relevance, cls.topics_json
            FROM papers p
-           JOIN classifications cls ON cls.doi = p.doi"""
+           JOIN classifications cls ON cls.doi = p.doi
+           WHERE length(coalesce(p.abstract, '')) >= {MIN_ABSTRACT_CHARS}"""
     ).fetchall()
     c.close()
     return pd.DataFrame([{
@@ -78,8 +105,19 @@ tax = load_taxonomies()
 journals = load_journals()
 df = load_classified_papers()
 summaries = load_paper_summaries()
+coverage = load_coverage_stats()
 
 st.title("📊 Trends — Ag/Env Econ Literature")
+
+if coverage["total"] > 0:
+    excluded = coverage["total"] - coverage["with_abstract"]
+    if excluded > 0:
+        pct = 100 * excluded / coverage["total"]
+        st.caption(
+            f"Trends below are based on **{coverage['with_abstract']:,} papers with substantive abstracts**. "
+            f"{excluded:,} papers ({pct:.0f}%) are excluded because their abstracts are missing from OpenAlex "
+            "(mostly Elsevier journals). Excluded papers still appear on the Dashboard."
+        )
 
 if df.empty:
     st.warning("No classified papers yet. Run the classifier first (`python -m src.classify`).")

@@ -2,10 +2,25 @@
 import json
 import sqlite3
 from datetime import date, timedelta
+from html import escape as html_escape
 from pathlib import Path
 
 import streamlit as st
 import yaml
+
+
+_CSV_INJECTION_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_csv_cell(value) -> str:
+    """Defang spreadsheet-formula injection. Cells starting with =, +, -, @, tab, or CR
+    are interpreted by Excel/Sheets as formulas; we prefix them with a single quote."""
+    if value is None:
+        return ""
+    s = str(value)
+    if s and s[0] in _CSV_INJECTION_CHARS:
+        return "'" + s
+    return s
 
 REPO_ROOT = Path(__file__).parent.parent
 DB_PATH = REPO_ROOT / "data" / "papers.db"
@@ -66,40 +81,48 @@ def _to_csv(papers, topic_label, method_label):
     w.writerow(["pub_date", "journal", "title", "authors", "topics", "methods", "relevance", "doi"])
     for p in papers:
         w.writerow([
-            p["pub_date"],
-            p["journal_code"],
-            p["title"],
-            "; ".join(p["authors"]),
-            "; ".join(topic_label.get(t, t) for t in p["topics"]),
-            "; ".join(method_label.get(m, m) for m in p["methods"]),
+            _safe_csv_cell(p["pub_date"]),
+            _safe_csv_cell(p["journal_code"]),
+            _safe_csv_cell(p["title"]),
+            _safe_csv_cell("; ".join(p["authors"])),
+            _safe_csv_cell("; ".join(topic_label.get(t, t) for t in p["topics"])),
+            _safe_csv_cell("; ".join(method_label.get(m, m) for m in p["methods"])),
             p["relevance"] if p["relevance"] is not None else "",
-            f"https://doi.org/{p['doi']}",
+            _safe_csv_cell(f"https://doi.org/{p['doi']}"),
         ])
     return buf.getvalue()
 
 
 def _render_paper(p, journals, topic_label, method_label):
-    journal_name = journals.get(p["journal_code"], p["journal_code"])
-    authors = ", ".join(p["authors"][:5])
+    # Escape all untrusted strings from OpenAlex before interpolating into HTML.
+    title = html_escape(p["title"])
+    doi = html_escape(p["doi"])
+    authors_raw = ", ".join(p["authors"][:5])
     if len(p["authors"]) > 5:
-        authors += " et al."
+        authors_raw += " et al."
+    authors = html_escape(authors_raw)
+    journal_name = html_escape(journals.get(p["journal_code"], p["journal_code"]))
 
     rel_badge = ""
     if p["classified"] and p["relevance"] is not None:
         color = "#1a8c4a" if p["relevance"] >= 7 else ("#d4790a" if p["relevance"] >= 4 else "#888")
-        rel_badge = f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">rel {p["relevance"]}/10</span>'
+        rel_badge = f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">rel {int(p["relevance"])}/10</span>'
 
     with st.container():
         st.markdown(
-            f'### [{p["title"]}](https://doi.org/{p["doi"]}) {rel_badge}',
+            f'### [{title}](https://doi.org/{doi}) {rel_badge}',
             unsafe_allow_html=True,
         )
-        st.caption(f"{authors} · *{journal_name}* ({p['journal_code']}) · {p['pub_date']}")
+        st.caption(f"{authors_raw} · *{journals.get(p['journal_code'], p['journal_code'])}* ({p['journal_code']}) · {p['pub_date']}")
 
         if p["classified"]:
             tags = []
-            tags += [f'<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">{topic_label.get(t, t)}</span>' for t in p["topics"]]
-            tags += [f'<span style="background:#f3e5f5;color:#6a1b9a;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">{method_label.get(m, m)}</span>' for m in p["methods"]]
+            for t in p["topics"]:
+                label = html_escape(topic_label.get(t, t))
+                tags.append(f'<span style="background:#e3f2fd;color:#1565c0;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">{label}</span>')
+            for m in p["methods"]:
+                label = html_escape(method_label.get(m, m))
+                tags.append(f'<span style="background:#f3e5f5;color:#6a1b9a;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;">{label}</span>')
             if tags:
                 st.markdown("".join(tags), unsafe_allow_html=True)
         else:

@@ -1,4 +1,5 @@
 """Weekly digest builder: match papers → subscribers, generate briefs, send via Gmail SMTP."""
+import hashlib
 import json
 import os
 import smtplib
@@ -8,6 +9,13 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from html import escape
 from pathlib import Path
+
+
+def _email_hash(email: str) -> str:
+    """SHA-256 hex digest of a normalized email. The committed digest_log stores
+    only this hash, never the plaintext email, so the public repo cannot leak
+    subscriber addresses if the digest is enabled in the future."""
+    return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
 
 from anthropic import Anthropic
 
@@ -61,7 +69,8 @@ def _candidate_papers(c, lookback_days: int) -> list[dict]:
 def _already_sent(c, doi: str, email: str) -> bool:
     return bool(
         c.execute(
-            "SELECT 1 FROM digest_log WHERE doi = ? AND subscriber = ?", (doi, email)
+            "SELECT 1 FROM digest_log WHERE doi = ? AND subscriber_hash = ?",
+            (doi, _email_hash(email)),
         ).fetchone()
     )
 
@@ -197,11 +206,12 @@ def run():
         html = _render_email_html(sub, papers_with_briefs, taxonomies)
         subject = f"Journal Watch — {len(matched)} new paper{'s' if len(matched) != 1 else ''}"
         _send_email(sub.email, subject, html)
+        sub_hash = _email_hash(sub.email)
         with db.conn() as c:
             for p in matched:
                 c.execute(
-                    "INSERT OR IGNORE INTO digest_log (doi, subscriber) VALUES (?, ?)",
-                    (p["doi"], sub.email),
+                    "INSERT OR IGNORE INTO digest_log (doi, subscriber_hash) VALUES (?, ?)",
+                    (p["doi"], sub_hash),
                 )
         print(f"  [{sub.email}] sent {len(matched)} papers")
 
