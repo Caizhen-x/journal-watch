@@ -3,12 +3,33 @@ import requests
 import yaml
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from . import db
 
 OPENALEX = "https://api.openalex.org/works"
 USER_AGENT = "journal-watch/0.1 (mailto:fqqqywzwan@gmail.com)"
 DEFAULT_LOOKBACK_DAYS = 30
+
+
+def _build_session() -> requests.Session:
+    """Session with retry-on-failure for transient OpenAlex hiccups.
+    3 retries with exponential backoff: ~1s, 2s, 4s. Retries on 429 + 5xx."""
+    s = requests.Session()
+    s.headers["User-Agent"] = USER_AGENT
+    retry = Retry(
+        total=3,
+        backoff_factor=1.0,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=("GET",),
+        respect_retry_after_header=True,
+    )
+    s.mount("https://", HTTPAdapter(max_retries=retry))
+    return s
+
+
+_session = _build_session()
 
 
 def _abstract_from_inverted_index(idx: dict | None) -> str | None:
@@ -34,7 +55,7 @@ def fetch_journal(issn: str, journal_code: str, since: str) -> list[dict]:
             "cursor": cursor,
             "select": "id,doi,title,abstract_inverted_index,authorships,publication_date,primary_location",
         }
-        r = requests.get(OPENALEX, params=params, headers={"User-Agent": USER_AGENT}, timeout=30)
+        r = _session.get(OPENALEX, params=params, timeout=30)
         r.raise_for_status()
         data = r.json()
         for w in data["results"]:

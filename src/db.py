@@ -1,9 +1,17 @@
-import sqlite3
+import hashlib
 import json
-from pathlib import Path
+import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "papers.db"
+TAXONOMIES_PATH = Path(__file__).parent.parent / "data" / "taxonomies.yaml"
+
+
+def current_taxonomy_hash() -> str:
+    """16-hex-char prefix of SHA-256 over taxonomies.yaml. Used to detect when
+    the taxonomy has changed so previously-classified papers are reclassified."""
+    return hashlib.sha256(TAXONOMIES_PATH.read_bytes()).hexdigest()[:16]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS papers (
@@ -22,12 +30,14 @@ CREATE INDEX IF NOT EXISTS idx_papers_pub_date ON papers(pub_date);
 CREATE INDEX IF NOT EXISTS idx_papers_journal ON papers(journal_code);
 
 CREATE TABLE IF NOT EXISTS classifications (
-    doi                TEXT PRIMARY KEY REFERENCES papers(doi),
-    topics_json        TEXT NOT NULL,
-    methods_json       TEXT NOT NULL,
-    relevance          INTEGER NOT NULL,
-    classifier_version TEXT NOT NULL,
-    classified_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    doi                    TEXT PRIMARY KEY REFERENCES papers(doi),
+    topics_json            TEXT NOT NULL,
+    methods_json           TEXT NOT NULL,
+    relevance              INTEGER NOT NULL,
+    classifier_version     TEXT NOT NULL,
+    classification_status  TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'no_abstract' | 'error'
+    taxonomy_hash          TEXT,                          -- prefix of taxonomies.yaml hash at classify time
+    classified_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS fetch_state (
@@ -65,9 +75,38 @@ def _migrate_digest_log(c):
         c.execute("DROP TABLE digest_log")
 
 
+def _migrate_classifications(c):
+    """Add classification_status and taxonomy_hash columns if missing.
+    Backfills existing rows so the next classifier run doesn't reclassify them all."""
+    cols = [r[1] for r in c.execute("PRAGMA table_info(classifications)").fetchall()]
+    if not cols:
+        return  # Table doesn't exist yet; SCHEMA will create it with the new columns.
+
+    if "classification_status" not in cols:
+        c.execute("ALTER TABLE classifications ADD COLUMN classification_status TEXT")
+        # Rows whose paper has no usable abstract → 'no_abstract' (don't waste LLM on them).
+        c.execute(
+            """UPDATE classifications SET classification_status = 'no_abstract'
+               WHERE doi IN (SELECT doi FROM papers
+                             WHERE length(coalesce(abstract, '')) < 100)"""
+        )
+        c.execute(
+            "UPDATE classifications SET classification_status = 'ok' WHERE classification_status IS NULL"
+        )
+
+    if "taxonomy_hash" not in cols:
+        c.execute("ALTER TABLE classifications ADD COLUMN taxonomy_hash TEXT")
+        # Backfill with current hash so existing rows are considered up-to-date.
+        c.execute(
+            "UPDATE classifications SET taxonomy_hash = ? WHERE taxonomy_hash IS NULL",
+            (current_taxonomy_hash(),),
+        )
+
+
 def init():
     with conn() as c:
         _migrate_digest_log(c)
+        _migrate_classifications(c)
         c.executescript(SCHEMA)
 
 
@@ -96,6 +135,13 @@ def upsert_paper(c, paper: dict) -> str:
         return "inserted"
     if not existing["abstract"] and paper.get("abstract"):
         c.execute("UPDATE papers SET abstract = ? WHERE doi = ?", (paper["abstract"], paper["doi"]))
+        # An earlier classify run may have stamped this paper as 'no_abstract' once it
+        # crossed the 30-day fallback. Now that an abstract exists, clear that stale
+        # decision so the next classify run re-runs the LLM on real content.
+        c.execute(
+            "DELETE FROM classifications WHERE doi = ? AND classification_status = 'no_abstract'",
+            (paper["doi"],),
+        )
         return "abstract_filled"
     return "unchanged"
 
@@ -103,39 +149,72 @@ def upsert_paper(c, paper: dict) -> str:
 def get_unclassified(
     c,
     classifier_version: str | None = None,
+    taxonomy_hash: str | None = None,
     limit: int | None = None,
     min_abstract_chars: int = 100,
 ) -> list[sqlite3.Row]:
-    """Return papers needing classification.
+    """Return papers needing (re)classification.
 
-    A paper needs classification if either:
-    - it has never been classified, OR
-    - its existing classification's classifier_version differs from `classifier_version` (if provided).
+    A paper is returned if any of:
+      - never classified, AND (has abstract OR > 30 days old)
+      - previously errored (status='error') — retry
+      - previously 'ok' but classifier_version differs from `classifier_version`
+      - previously 'ok' but taxonomy_hash differs from `taxonomy_hash`
 
-    Skips papers with abstracts shorter than min_abstract_chars unless older than 30 days.
+    Rows with status='no_abstract' are NEVER returned by version/taxonomy bumps —
+    they're stale only when an abstract appears later, which upsert_paper handles
+    by deleting the stale row.
     """
-    version_clause = "cls.doi IS NULL"
-    params: tuple = ()
+    stale_conds: list[str] = []
+    params: list = []
     if classifier_version is not None:
-        version_clause = "(cls.doi IS NULL OR cls.classifier_version != ?)"
-        params = (classifier_version,)
-    sql = f"""SELECT p.* FROM papers p
-             LEFT JOIN classifications cls ON cls.doi = p.doi
-             WHERE {version_clause}
-               AND (length(coalesce(p.abstract, '')) >= {int(min_abstract_chars)}
-                    OR julianday('now') - julianday(p.pub_date) > 30)
-             ORDER BY p.pub_date DESC"""
+        stale_conds.append("cls.classifier_version != ?")
+        params.append(classifier_version)
+    if taxonomy_hash is not None:
+        stale_conds.append("cls.taxonomy_hash != ?")
+        params.append(taxonomy_hash)
+    stale_clause = " OR ".join(stale_conds) if stale_conds else "0"
+
+    sql = f"""
+        SELECT p.* FROM papers p
+        LEFT JOIN classifications cls ON cls.doi = p.doi
+        WHERE
+            (cls.doi IS NULL
+             AND (length(coalesce(p.abstract, '')) >= {int(min_abstract_chars)}
+                  OR julianday('now') - julianday(p.pub_date) > 30))
+         OR cls.classification_status = 'error'
+         OR (cls.classification_status = 'ok' AND ({stale_clause}))
+        ORDER BY p.pub_date DESC
+    """
     if limit:
         sql += f" LIMIT {int(limit)}"
     return list(c.execute(sql, params))
 
 
-def save_classification(c, doi: str, topics: list, methods: list, relevance: int, version: str):
+def save_classification(
+    c,
+    doi: str,
+    topics: list,
+    methods: list,
+    relevance: int,
+    version: str,
+    status: str = "ok",
+    tax_hash: str | None = None,
+):
     c.execute(
         """INSERT OR REPLACE INTO classifications
-           (doi, topics_json, methods_json, relevance, classifier_version)
-           VALUES (?, ?, ?, ?, ?)""",
-        (doi, json.dumps(topics), json.dumps(methods), relevance, version),
+           (doi, topics_json, methods_json, relevance,
+            classifier_version, classification_status, taxonomy_hash, classified_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+        (
+            doi,
+            json.dumps(topics),
+            json.dumps(methods),
+            relevance,
+            version,
+            status,
+            tax_hash,
+        ),
     )
 
 

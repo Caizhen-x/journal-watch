@@ -71,27 +71,54 @@ def run(limit: int | None = None):
     valid_methods = {m["code"] for m in tax["methods"]}
 
     db.init()
+    tax_hash = db.current_taxonomy_hash()
     with db.conn() as c:
-        papers = db.get_unclassified(c, classifier_version=CLASSIFIER_VERSION, limit=limit)
+        papers = db.get_unclassified(
+            c, classifier_version=CLASSIFIER_VERSION, taxonomy_hash=tax_hash, limit=limit
+        )
 
-    print(f"Classifying {len(papers)} papers...")
-    classified = 0
+    print(f"Processing {len(papers)} papers (taxonomy_hash={tax_hash})...")
+    llm_calls = no_abstract_skipped = errors = 0
     for p in papers:
+        abstract = p["abstract"] or ""
+        # No abstract → save as 'no_abstract' without spending an LLM call.
+        # The classifier can't do useful work on a missing abstract; if one
+        # arrives later via upsert_paper, the stale row is dropped and we retry.
+        if len(abstract) < 100:
+            with db.conn() as c:
+                db.save_classification(
+                    c, p["doi"], [], [], 0, CLASSIFIER_VERSION,
+                    status="no_abstract", tax_hash=tax_hash,
+                )
+            no_abstract_skipped += 1
+            continue
+
         try:
-            result = _classify_one(client, system, p["title"], p["abstract"], p["journal_code"])
+            result = _classify_one(client, system, p["title"], abstract, p["journal_code"])
         except Exception as e:
             print(f"  [{p['doi']}] error: {e}")
+            with db.conn() as c:
+                db.save_classification(
+                    c, p["doi"], [], [], 0, CLASSIFIER_VERSION,
+                    status="error", tax_hash=tax_hash,
+                )
+            errors += 1
             continue
+
         topics = [t for t in result.get("topics", []) if t in valid_topics]
         methods = [m for m in result.get("methods", []) if m in valid_methods]
         relevance = int(result.get("relevance", 0))
         with db.conn() as c:
-            db.save_classification(c, p["doi"], topics, methods, relevance, CLASSIFIER_VERSION)
-        classified += 1
-        if classified % 10 == 0:
-            print(f"  ...{classified}/{len(papers)}")
-    print(f"Classified {classified} papers")
-    return classified
+            db.save_classification(
+                c, p["doi"], topics, methods, relevance, CLASSIFIER_VERSION,
+                status="ok", tax_hash=tax_hash,
+            )
+        llm_calls += 1
+        if llm_calls % 10 == 0:
+            print(f"  ...{llm_calls} LLM calls so far")
+
+    print(f"Done. LLM calls: {llm_calls}, no_abstract skipped: {no_abstract_skipped}, errors: {errors}")
+    return llm_calls
 
 
 if __name__ == "__main__":
