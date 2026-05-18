@@ -4,7 +4,9 @@ The browse UI and trend dashboard are deployed to Streamlit Community Cloud (fre
 
 ## How it stays in sync
 
-The daily-poll GitHub Actions workflow commits the updated `data/papers.db` to the repo. Streamlit Cloud auto-redeploys on every push, so the hosted app shows fresh data without any manual step.
+The weekly-poll GitHub Actions workflow (Mondays 06:00 UTC) commits the updated `data/papers.db` to the repo. Streamlit Cloud auto-redeploys on every push, so the hosted app shows fresh data without any manual step.
+
+The weekly-digest workflow is paused: it's gated by an `ENABLE_DIGEST` repo variable that defaults unset. To re-enable later, set `ENABLE_DIGEST = "true"` and add the Gmail/Form/HMAC-key secrets per `SETUP.md`.
 
 ## One-time setup
 

@@ -94,24 +94,49 @@ The digest is sent from a Gmail account via SMTP. You'll use **App Passwords**, 
 
 In the Sheet, manually add a column header `Unsubscribe`. When someone emails you to unsubscribe, type any non-empty value (e.g., "yes") in their row. The next digest run will skip them.
 
-## 4. Verify everything is wired up
+## 4. Set the HMAC key for digest_log
+
+Subscriber emails get HMAC-SHA256-hashed before they're written to `digest_log` (which is committed to the public repo). The key for the HMAC lives in another secret.
 
 ```bash
-gh secret list --repo Caizhen-x/journal-watch
+# Generate a strong random key, paste it when prompted
+python -c "import secrets; print(secrets.token_hex(32))"
+gh secret set DIGEST_LOG_HASH_KEY --repo Caizhen-x/journal-watch
 ```
 
-You should see all four:
+## 5. Enable the digest workflow
+
+The digest workflow's Send step is gated on a repo *variable* (not secret) named `ENABLE_DIGEST`. Until this is `"true"`, even manual `workflow_dispatch` runs the no-op branch.
+
+```bash
+gh variable set ENABLE_DIGEST --body "true" --repo Caizhen-x/journal-watch
+```
+
+To re-pause the digest later: `gh variable delete ENABLE_DIGEST --repo Caizhen-x/journal-watch` (or set it to anything other than `"true"`).
+
+## 6. Verify everything is wired up
+
+```bash
+gh secret list   --repo Caizhen-x/journal-watch
+gh variable list --repo Caizhen-x/journal-watch
+```
+
+You should see all five secrets:
 - `ANTHROPIC_API_KEY`
 - `GMAIL_SENDER_ADDRESS`
 - `GMAIL_APP_PASSWORD`
 - `SUBSCRIBERS_CSV_URL`
+- `DIGEST_LOG_HASH_KEY`
 
-## 5. Test runs
+And one variable:
+- `ENABLE_DIGEST = true`
+
+## 7. Test runs
 
 Trigger the workflows manually before the first cron fires:
 
 ```bash
-gh workflow run "Daily poll"     --repo Caizhen-x/journal-watch
+gh workflow run "Weekly poll"    --repo Caizhen-x/journal-watch
 gh workflow run "Weekly digest"  --repo Caizhen-x/journal-watch
 ```
 

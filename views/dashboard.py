@@ -94,26 +94,29 @@ def _to_csv(papers, topic_label, method_label):
 
 
 def _render_paper(p, journals, topic_label, method_label):
-    # Escape all untrusted strings from OpenAlex before interpolating into HTML.
-    title = html_escape(p["title"])
-    doi = html_escape(p["doi"])
     authors_raw = ", ".join(p["authors"][:5])
     if len(p["authors"]) > 5:
         authors_raw += " et al."
-    authors = html_escape(authors_raw)
-    journal_name = html_escape(journals.get(p["journal_code"], p["journal_code"]))
-
-    rel_badge = ""
-    if p["classified"] and p["relevance"] is not None:
-        color = "#1a8c4a" if p["relevance"] >= 7 else ("#d4790a" if p["relevance"] >= 4 else "#888")
-        rel_badge = f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">rel {int(p["relevance"])}/10</span>'
+    journal_name = journals.get(p["journal_code"], p["journal_code"])
 
     with st.container():
-        st.markdown(
-            f'### [{title}](https://doi.org/{doi}) {rel_badge}',
-            unsafe_allow_html=True,
-        )
-        st.caption(f"{authors_raw} · *{journals.get(p['journal_code'], p['journal_code'])}* ({p['journal_code']}) · {p['pub_date']}")
+        # Title row: title via plain markdown (auto-escapes HTML); badge in
+        # a separate column with its own unsafe_allow_html call. This avoids
+        # mixing untrusted user data with the unsafe-HTML rendering path.
+        title_col, badge_col = st.columns([6, 1])
+        with title_col:
+            st.markdown(f'### [{p["title"]}](https://doi.org/{p["doi"]})')
+        with badge_col:
+            if p["classified"] and p["relevance"] is not None:
+                color = "#1a8c4a" if p["relevance"] >= 7 else ("#d4790a" if p["relevance"] >= 4 else "#888")
+                rel_badge = (
+                    f'<div style="margin-top:14px;text-align:right;">'
+                    f'<span style="background:{color};color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">'
+                    f'rel {int(p["relevance"])}/10</span></div>'
+                )
+                st.markdown(rel_badge, unsafe_allow_html=True)
+
+        st.caption(f"{authors_raw} · *{journal_name}* ({p['journal_code']}) · {p['pub_date']}")
 
         if p["classified"]:
             tags = []

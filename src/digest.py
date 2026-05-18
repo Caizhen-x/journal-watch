@@ -1,5 +1,6 @@
 """Weekly digest builder: match papers → subscribers, generate briefs, send via Gmail SMTP."""
 import hashlib
+import hmac
 import json
 import os
 import smtplib
@@ -12,10 +13,21 @@ from pathlib import Path
 
 
 def _email_hash(email: str) -> str:
-    """SHA-256 hex digest of a normalized email. The committed digest_log stores
-    only this hash, never the plaintext email, so the public repo cannot leak
-    subscriber addresses if the digest is enabled in the future."""
-    return hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    """HMAC-SHA256 hex digest of a normalized email, keyed by DIGEST_LOG_HASH_KEY.
+
+    The committed digest_log stores only this hash, never the plaintext email.
+    Plain SHA-256 would be enumerable for a small known group (15 hu-berlin
+    emails ≈ seconds to brute-force offline); HMAC with a secret key makes
+    that intractable.
+    """
+    key = os.environ.get("DIGEST_LOG_HASH_KEY")
+    if not key:
+        raise SystemExit(
+            "DIGEST_LOG_HASH_KEY not set. Generate a random value and add it as a "
+            "GHA secret before enabling the digest (e.g. `python -c \"import secrets;"
+            "print(secrets.token_hex(32))\"`)."
+        )
+    return hmac.new(key.encode("utf-8"), email.strip().lower().encode("utf-8"), hashlib.sha256).hexdigest()
 
 from anthropic import Anthropic
 

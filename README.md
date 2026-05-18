@@ -6,20 +6,21 @@ Automated journal watch for the **Agrifood Chain Management** group at the Thaer
 
 [![Live app](https://img.shields.io/badge/Live_app-thaer--agrifood--journal--watch.streamlit.app-FF4B4B?logo=streamlit&logoColor=white)](https://thaer-agrifood-journal-watch.streamlit.app/) [![Hosted on Streamlit Cloud](https://img.shields.io/badge/hosted_on-Streamlit_Cloud-FF4B4B)](https://share.streamlit.io)
 
-The site polls top journals weekly, classifies new papers by **topic × method** using an LLM, and emails a weekly digest of matching papers to subscribed group members. Group members access the dashboard with the shared password.
+The site polls top journals weekly and classifies new papers by **topic × method** using an LLM. An email-digest workflow exists but is **paused** — to re-enable, set the `ENABLE_DIGEST` repository variable and add the Gmail/Form secrets per `SETUP.md`. Group members access the dashboard with a shared password.
 
 ## How it works
 
 ```
-[GitHub Actions, every Monday]
+[GitHub Actions, every Monday 06:00 UTC]
     ↓
 Fetch new papers from OpenAlex (by ISSN)
     ↓
 Claude Haiku classifier tags each paper: topics[] + methods[] + relevance (0–10)
     ↓
 SQLite committed back to the repo → Streamlit Cloud auto-redeploys
-    ↓
-Weekly digest workflow renders briefs and emails subscribers
+
+[Weekly digest workflow — currently disabled]
+   gated by ENABLE_DIGEST repo variable; sends emails when re-enabled.
 ```
 
 ## Repo layout
@@ -45,10 +46,10 @@ journal-watch/
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+JOURNAL_WATCH_DEV_MODE=true streamlit run app.py
 ```
 
-Opens at http://localhost:8501. Same code as the live site; without `app_password` configured in `.streamlit/secrets.toml`, the password gate is disabled for local development.
+Opens at http://localhost:8501. Same code as the live site. The password gate **fails closed by default** — set `JOURNAL_WATCH_DEV_MODE=true` to bypass it locally, or put a real `app_password` in `.streamlit/secrets.toml`. (Production must use `app_password`; do not deploy with dev mode.)
 
 ## Coverage
 
