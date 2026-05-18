@@ -68,8 +68,9 @@ def conn():
 
 
 def _migrate_digest_log(c):
-    """Old schema stored plaintext emails. New schema stores SHA-256 hashes.
-    digest_log has always been empty in production, so we drop and recreate."""
+    """Old schema stored plaintext emails. New schema stores HMAC-SHA256 hashes
+    keyed by DIGEST_LOG_HASH_KEY (see src/digest.py). digest_log has always been
+    empty in production, so we drop and recreate."""
     cols = [r[1] for r in c.execute("PRAGMA table_info(digest_log)").fetchall()]
     if cols and "subscriber" in cols and "subscriber_hash" not in cols:
         c.execute("DROP TABLE digest_log")
